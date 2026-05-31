@@ -1,0 +1,27 @@
+# Local single-container dev stack.
+# Spins up the backend (POOL_SIZE=1) and lets Docker manage one workshop container.
+#
+# Setup:
+#   cp backend/.env.example .env   # then fill in PI_MODEL and OPENAI_API_KEY
+#   docker build -t pi-workshop -f docker/Dockerfile .
+#   docker compose up
+#
+# Then open http://localhost:3000
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      # Backend needs Docker socket to manage workshop containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Bind-mount frontend for live edits without rebuilding
+      - ./frontend:/app/frontend:ro
+    env_file:
+      - .env
+    environment:
+      POOL_SIZE: "1"
+    restart: unless-stopped

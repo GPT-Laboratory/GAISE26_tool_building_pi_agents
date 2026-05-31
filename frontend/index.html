@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pi Workshop</title>
+  <link rel="stylesheet" href="https://unpkg.com/@xterm/xterm@5.5.0/css/xterm.css">
+  <script src="https://unpkg.com/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+  <script src="https://unpkg.com/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Join view ── */
+    #join-view {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+    }
+
+    .join-box {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 2rem 2.5rem;
+      width: 360px;
+    }
+
+    .join-box h1 {
+      font-size: 1.4rem;
+      margin-bottom: 1.5rem;
+      color: #8be9fd;
+      letter-spacing: 0.05em;
+    }
+
+    .join-box label {
+      display: block;
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-bottom: 0.3rem;
+    }
+
+    .join-box input {
+      width: 100%;
+      padding: 0.55rem 0.7rem;
+      background: #111;
+      border: 1px solid #555;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      outline: none;
+    }
+
+    .join-box input:focus { border-color: #8be9fd; }
+
+    .join-box button {
+      width: 100%;
+      padding: 0.6rem;
+      background: #8be9fd;
+      color: #111;
+      border: none;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .join-box button:hover { background: #6dd8f0; }
+    .join-box button:disabled { background: #555; color: #888; cursor: default; }
+
+    #join-error {
+      margin-top: 0.8rem;
+      color: #ff5555;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+    }
+
+    /* ── Workspace view ── */
+    #workspace-view {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #111;
+      border-bottom: 1px solid #333;
+      padding: 0.3rem 1rem;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    #status-bar .left { display: flex; align-items: center; gap: 1rem; }
+    #status-bar .title { color: #8be9fd; font-weight: bold; }
+
+    #status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    #status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #555;
+      transition: background 0.3s;
+    }
+
+    #status-dot.connecting   { background: #f1fa8c; }
+    #status-dot.connected    { background: #50fa7b; }
+    #status-dot.disconnected { background: #ff5555; }
+    #status-dot.reconnecting { background: #ffb86c; }
+
+    #status-text { color: #aaa; }
+
+    #reset-btn {
+      padding: 0.25rem 0.7rem;
+      background: transparent;
+      border: 1px solid #ff5555;
+      border-radius: 4px;
+      color: #ff5555;
+      font-family: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #reset-btn:hover { background: rgba(255,85,85,0.15); }
+
+    #panes {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      gap: 2px;
+      background: #111;
+    }
+
+    .pane-wrap {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .pane-label {
+      font-size: 0.7rem;
+      color: #555;
+      padding: 0.2rem 0.5rem;
+      background: #111;
+      border-bottom: 1px solid #222;
+      flex-shrink: 0;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .pane-label span { color: #777; }
+
+    .term-container {
+      flex: 1;
+      overflow: hidden;
+      padding: 4px;
+    }
+
+    .xterm { height: 100%; }
+    .xterm-viewport { overflow-y: scroll !important; }
+  </style>
+</head>
+<body>
+
+<!-- ── Join view ── -->
+<div id="join-view">
+  <div class="join-box">
+    <h1>Pi Workshop</h1>
+    <label for="email-input">Your email</label>
+    <input id="email-input" type="email" placeholder="you@example.com" autocomplete="email">
+    <label for="code-input">Join code</label>
+    <input id="code-input" type="text" placeholder="shown on screen">
+    <button id="join-btn">Join</button>
+    <div id="join-error"></div>
+  </div>
+</div>
+
+<!-- ── Workspace view ── -->
+<div id="workspace-view">
+  <div id="status-bar">
+    <div class="left">
+      <span class="title">Pi Workshop</span>
+      <div id="status-indicator">
+        <div id="status-dot" class="connecting"></div>
+        <span id="status-text">connecting…</span>
+      </div>
+    </div>
+    <button id="reset-btn" title="Restart your agent container">Restart agent</button>
+  </div>
+  <div id="panes">
+    <div class="pane-wrap">
+      <div class="pane-label">Agent <span>(interactive)</span></div>
+      <div class="term-container" id="agent-container"></div>
+    </div>
+    <div class="pane-wrap">
+      <div class="pane-label">Activity <span>(read-only)</span></div>
+      <div class="term-container" id="work-container"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Storage keys
+  const S_EMAIL = 'ws_email';
+  const S_TOKEN = 'ws_token';
+
+  // ── State
+  let agentWs = null;
+  let workWs  = null;
+  let agentTerm = null;
+  let workTerm  = null;
+  let agentFit  = null;
+  let workFit   = null;
+  let agentReconnectTimer = null;
+  let workReconnectTimer  = null;
+  let agentConnected = false;
+  let workConnected  = false;
+
+  // ── Status bar
+  function setStatus(state, text) {
+    const dot = document.getElementById('status-dot');
+    dot.className = state;
+    document.getElementById('status-text').textContent = text;
+  }
+
+  function updateStatus() {
+    if (agentConnected && workConnected) {
+      setStatus('connected', 'connected');
+    } else if (!agentConnected && !workConnected) {
+      setStatus('reconnecting', 'reconnecting…');
+    } else {
+      setStatus('connecting', 'connecting…');
+    }
+  }
+
+  // ── Join view
+  const joinView      = document.getElementById('join-view');
+  const workspaceView = document.getElementById('workspace-view');
+  const joinBtn       = document.getElementById('join-btn');
+  const joinError     = document.getElementById('join-error');
+  const emailInput    = document.getElementById('email-input');
+  const codeInput     = document.getElementById('code-input');
+
+  joinBtn.addEventListener('click', doJoin);
+  codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') doJoin(); });
+  emailInput.addEventListener('keydown', e => { if (e.key === 'Enter') codeInput.focus(); });
+
+  async function doJoin() {
+    const email = emailInput.value.trim();
+    const code  = codeInput.value.trim();
+    if (!email || !code) {
+      joinError.textContent = 'Please fill in both fields.';
+      return;
+    }
+    joinBtn.disabled = true;
+    joinError.textContent = '';
+    try {
+      const res = await fetch('/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        joinError.textContent = body.error ?? 'Join failed.';
+        if (res.status === 503) joinError.textContent = 'Room is full — ask the instructor.';
+        joinBtn.disabled = false;
+        return;
+      }
+      sessionStorage.setItem(S_EMAIL, email);
+      sessionStorage.setItem(S_TOKEN, body.token);
+      showWorkspace();
+    } catch (err) {
+      joinError.textContent = 'Network error. Try again.';
+      joinBtn.disabled = false;
+    }
+  }
+
+  // ── Show workspace
+  function showWorkspace() {
+    joinView.style.display = 'none';
+    workspaceView.style.display = 'flex';
+    initTerminals();
+  }
+
+  // ── Terminal init
+  function makeTerminal(containerId, readonly) {
+    const term = new Terminal({
+      cursorBlink: !readonly,
+      scrollback: 5000,
+      theme: {
+        background: '#000000',
+        foreground: '#e0e0e0',
+        cursor: '#8be9fd',
+        selectionBackground: 'rgba(139,233,253,0.3)',
+      },
+      fontSize: 13,
+      fontFamily: 'Menlo, "DejaVu Sans Mono", "Courier New", monospace',
+      convertEol: true,
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(document.getElementById(containerId));
+    fit.fit();
+    return { term, fit };
+  }
+
+  function initTerminals() {
+    ({ term: agentTerm, fit: agentFit } = makeTerminal('agent-container', false));
+    ({ term: workTerm,  fit: workFit  } = makeTerminal('work-container',  true));
+
+    // Resize observer for both panes
+    const resizeObs = new ResizeObserver(() => {
+      if (agentFit) { agentFit.fit(); sendResize(agentWs, agentTerm); }
+      if (workFit)  { workFit.fit();  sendResize(workWs,  workTerm);  }
+    });
+    resizeObs.observe(document.getElementById('agent-container'));
+    resizeObs.observe(document.getElementById('work-container'));
+
+    connectAgent();
+    connectWork();
+  }
+
+  // ── ttyd protocol helpers
+  function sendResize(ws, term) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const msg = JSON.stringify({ columns: term.cols, rows: term.rows });
+    const encoded = new TextEncoder().encode(msg);
+    const pkt = new Uint8Array(1 + encoded.length);
+    pkt[0] = 0x01; // resize type
+    pkt.set(encoded, 1);
+    ws.send(pkt.buffer);
+  }
+
+  function onTtydMessage(term) {
+    return function(event) {
+      if (!(event.data instanceof ArrayBuffer)) return;
+      const data = new Uint8Array(event.data);
+      if (data.length < 1) return;
+      if (data[0] === 0x01) {
+        // Output data
+        term.write(data.slice(1));
+      }
+      // 0x02 = title, 0x03 = prefs — ignore
+    };
+  }
+
+  // ── WebSocket connections
+  function wsUrl(path) {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${proto}://${location.host}${path}`;
+  }
+
+  function connectAgent() {
+    const token = sessionStorage.getItem(S_TOKEN);
+    if (!token) return;
+
+    clearTimeout(agentReconnectTimer);
+    agentConnected = false;
+    updateStatus();
+
+    agentWs = new WebSocket(wsUrl(`/ws/agent/${token}`), ['tty']);
+    agentWs.binaryType = 'arraybuffer';
+
+    agentWs.onopen = () => {
+      agentConnected = true;
+      updateStatus();
+      if (agentFit) { agentFit.fit(); sendResize(agentWs, agentTerm); }
+    };
+
+    agentWs.onmessage = onTtydMessage(agentTerm);
+
+    agentWs.onerror = () => {};
+
+    agentWs.onclose = () => {
+      agentConnected = false;
+      updateStatus();
+      agentReconnectTimer = setTimeout(connectAgent, 3000);
+    };
+
+    // Wire keyboard input → ttyd stdin
+    agentTerm.onData(input => {
+      if (!agentWs || agentWs.readyState !== WebSocket.OPEN) return;
+      const encoded = new TextEncoder().encode(input);
+      const pkt = new Uint8Array(1 + encoded.length);
+      pkt[0] = 0x00; // stdin type
+      pkt.set(encoded, 1);
+      agentWs.send(pkt.buffer);
+    });
+  }
+
+  function connectWork() {
+    const token = sessionStorage.getItem(S_TOKEN);
+    if (!token) return;
+
+    clearTimeout(workReconnectTimer);
+    workConnected = false;
+    updateStatus();
+
+    workWs = new WebSocket(wsUrl(`/ws/work/${token}`), ['tty']);
+    workWs.binaryType = 'arraybuffer';
+
+    workWs.onopen = () => {
+      workConnected = true;
+      updateStatus();
+      if (workFit) { workFit.fit(); sendResize(workWs, workTerm); }
+    };
+
+    workWs.onmessage = onTtydMessage(workTerm);
+    workWs.onerror = () => {};
+
+    workWs.onclose = () => {
+      workConnected = false;
+      updateStatus();
+      workReconnectTimer = setTimeout(connectWork, 3000);
+    };
+  }
+
+  // ── Reset button
+  document.getElementById('reset-btn').addEventListener('click', async () => {
+    const email = sessionStorage.getItem(S_EMAIL);
+    const token = sessionStorage.getItem(S_TOKEN);
+    if (!email || !token) return;
+    if (!confirm('This will restart your agent and lose current progress. Continue?')) return;
+    try {
+      await fetch('/admin/reset-self', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, token }),
+      });
+    } catch { /* ignore */ }
+    location.reload();
+  });
+
+  // ── Auto-join if session exists
+  if (sessionStorage.getItem(S_TOKEN)) {
+    showWorkspace();
+  }
+})();
+</script>
+</body>
+</html>

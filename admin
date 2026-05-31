@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Admin CLI for Pi Workshop backend
+# Usage: ./admin <command> [args]
+#
+# Commands:
+#   warm [N]           Pre-warm N containers (default: 40)
+#   status             List all active sessions
+#   reset <email>      Kill + restart container for participant
+#   tail <email>       Stream participant's activity log
+#
+# Config (env or .admin_token file):
+#   BACKEND_URL   default: http://localhost:3000
+#   ADMIN_TOKEN   required
+
+set -euo pipefail
+
+# Load token from file if not in env
+if [[ -z "${ADMIN_TOKEN:-}" && -f .admin_token ]]; then
+  ADMIN_TOKEN="$(cat .admin_token)"
+fi
+
+BACKEND_URL="${BACKEND_URL:-http://localhost:3000}"
+
+if [[ -z "${ADMIN_TOKEN:-}" ]]; then
+  echo "Error: ADMIN_TOKEN not set. Set it in env or write it to .admin_token" >&2
+  exit 1
+fi
+
+COMMAND="${1:-}"
+
+case "$COMMAND" in
+  warm)
+    N="${2:-40}"
+    echo "Warming $N containers…"
+    curl -sf -X POST \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"count\": $N}" \
+      "$BACKEND_URL/admin/warm" | jq .
+    ;;
+
+  status)
+    echo "Fetching session list…"
+    curl -sf \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      "$BACKEND_URL/admin/sessions" | jq '.sessions[] | {email, containerId, containerIp, lastSeen}'
+    ;;
+
+  reset)
+    EMAIL="${2:-}"
+    if [[ -z "$EMAIL" ]]; then
+      echo "Usage: ./admin reset <email>" >&2
+      exit 1
+    fi
+    echo "Resetting session for $EMAIL…"
+    curl -sf -X POST \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      "$BACKEND_URL/admin/reset/$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$EMAIL")" | jq .
+    ;;
+
+  tail)
+    EMAIL="${2:-}"
+    if [[ -z "$EMAIL" ]]; then
+      echo "Usage: ./admin tail <email>" >&2
+      exit 1
+    fi
+    echo "Tailing activity log for $EMAIL (Ctrl-C to stop)…"
+    curl -sf \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      "$BACKEND_URL/admin/tail/$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$EMAIL")"
+    ;;
+
+  *)
+    cat <<'EOF'
+Pi Workshop Admin CLI
+
+  ./admin warm [N]           Pre-warm N containers (default: 40)
+  ./admin status             List active sessions
+  ./admin reset <email>      Restart container for participant
+  ./admin tail <email>       View participant's activity log
+
+Config:
+  BACKEND_URL   (default: http://localhost:3000)
+  ADMIN_TOKEN   set in env or write to .admin_token
+EOF
+    ;;
+esac

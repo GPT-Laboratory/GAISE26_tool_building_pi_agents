@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node
+node_modules/
+backend/package-lock.json
+
+# Secrets
+keys.txt
+.admin_token
