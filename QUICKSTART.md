@@ -45,8 +45,9 @@ Tests the join flow, browser UI, file upload, and WebSocket proxy end-to-end.
 cp backend/.env.example .env
 # Edit .env: set PI_MODEL, OPENAI_API_KEY, OPENAI_BASE_URL
 
-docker build -t pi-workshop -f docker/Dockerfile .  # workshop image (once)
-docker compose up                                    # starts backend with POOL_SIZE=1
+docker build -t pi-workshop -f docker/Dockerfile .       # workshop image (once)
+docker network create workshop 2>/dev/null || true        # required before compose up
+docker compose up                                         # starts backend with POOL_SIZE=1
 ```
 
 Open `http://localhost:3000` and join with code `workshop2026`.
