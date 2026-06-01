@@ -7,12 +7,6 @@ if [ ! -d /home/agent/work ]; then
 fi
 cp -r /home/agent/work-seed/. /home/agent/work/
 
-# Lock down files pi should follow but never modify.
-# MEMORY.md is intentionally left writable — pi updates it between turns.
-chmod 444 /home/agent/work/SOUL.md
-chmod 444 /home/agent/work/AGENTS.md
-chmod 444 /home/agent/work/task.md
-
 # Run pi directly as the tmux window command (not via send-keys) so the
 # invocation and API key are never visible in the terminal scroll buffer.
 tmux new-session -d -s s -n agent \
