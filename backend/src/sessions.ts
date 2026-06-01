@@ -18,10 +18,12 @@ const byToken = new Map<string, Session>();
 // Rate limiting: ip → {count, resetAt}
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
 
-const RATE_LIMIT_MAX = 30;       // per IP per window; join code is the real protection
+// Set RATE_LIMIT_MAX=0 in .env to disable rate limiting (e.g. during load tests).
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX ?? '30', 10);
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function checkRateLimit(ip: string): boolean {
+  if (RATE_LIMIT_MAX === 0) return true;  // disabled
   const now = Date.now();
   let entry = rateLimits.get(ip);
   if (!entry || now > entry.resetAt) {
