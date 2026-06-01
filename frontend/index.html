@@ -348,26 +348,19 @@
   }
 
   // ── ttyd protocol helpers
+  // ttyd uses TEXT frames; first character is the message type ('0'–'3').
+  // Server→Client: '0'=output, '1'=title, '2'=prefs
+  // Client→Server: '0'=stdin, '1'=resize JSON
   function sendResize(ws, term) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const msg = JSON.stringify({ columns: term.cols, rows: term.rows });
-    const encoded = new TextEncoder().encode(msg);
-    const pkt = new Uint8Array(1 + encoded.length);
-    pkt[0] = 0x01; // resize type
-    pkt.set(encoded, 1);
-    ws.send(pkt.buffer);
+    ws.send('1' + JSON.stringify({ columns: term.cols, rows: term.rows }));
   }
 
   function onTtydMessage(term) {
     return function(event) {
-      if (!(event.data instanceof ArrayBuffer)) return;
-      const data = new Uint8Array(event.data);
-      if (data.length < 1) return;
-      if (data[0] === 0x01) {
-        // Output data
-        term.write(data.slice(1));
-      }
-      // 0x02 = title, 0x03 = prefs — ignore
+      if (typeof event.data !== 'string') return;
+      if (event.data[0] === '0') term.write(event.data.substring(1));
+      // '1' = title, '2' = prefs — ignore
     };
   }
 
@@ -386,7 +379,6 @@
     updateStatus();
 
     agentWs = new WebSocket(wsUrl(`/ws/agent/${token}`), ['tty']);
-    agentWs.binaryType = 'arraybuffer';
 
     agentWs.onopen = () => {
       agentConnected = true;
@@ -407,11 +399,7 @@
     // Wire keyboard input → ttyd stdin
     agentTerm.onData(input => {
       if (!agentWs || agentWs.readyState !== WebSocket.OPEN) return;
-      const encoded = new TextEncoder().encode(input);
-      const pkt = new Uint8Array(1 + encoded.length);
-      pkt[0] = 0x00; // stdin type
-      pkt.set(encoded, 1);
-      agentWs.send(pkt.buffer);
+      agentWs.send('0' + input);
     });
   }
 
@@ -424,7 +412,6 @@
     updateStatus();
 
     workWs = new WebSocket(wsUrl(`/ws/work/${token}`), ['tty']);
-    workWs.binaryType = 'arraybuffer';
 
     workWs.onopen = () => {
       workConnected = true;

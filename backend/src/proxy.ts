@@ -3,9 +3,9 @@ import WebSocket from 'ws';
 /**
  * Proxy a client WebSocket to a ttyd instance.
  *
- * ttyd uses a custom binary protocol:
- *   Server → Client: byte[0] = type (0x01=data, 0x02=title, 0x03=prefs); rest = payload
- *   Client → Server: byte[0] = type (0x00=stdin, 0x01=resize JSON); rest = payload
+ * ttyd uses TEXT WebSocket frames with an ASCII digit type prefix:
+ *   Server → Client: '0'=output data, '1'=window title, '2'=preferences JSON
+ *   Client → Server: '0'=stdin, '1'=resize JSON {"columns":N,"rows":M}
  *
  * For the read-only (work) pane, client→server messages are silently dropped.
  */
@@ -22,13 +22,12 @@ export function proxyWs(
   });
 
   upstream.on('open', () => {
-    // Drain any queued messages once upstream is ready
     drainQueue();
   });
 
-  upstream.on('message', (data: WebSocket.RawData) => {
+  upstream.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
     if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(data as Buffer);
+      clientWs.send(data as Buffer, { binary: isBinary });
     }
   });
 
@@ -39,30 +38,32 @@ export function proxyWs(
 
   upstream.on('close', (code, reason) => {
     if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.close(code, reason);
+      // Guard against invalid close codes (e.g. 0) which ws rejects
+      const safeCode = code >= 1000 ? code : 1000;
+      clientWs.close(safeCode, reason);
     }
   });
 
   // Queue messages that arrive before upstream is OPEN
-  const queue: WebSocket.RawData[] = [];
+  const queue: Array<{ data: WebSocket.RawData; isBinary: boolean }> = [];
   let upstreamReady = false;
 
   function drainQueue(): void {
     upstreamReady = true;
-    for (const msg of queue) {
-      upstream.send(msg as Buffer);
+    for (const { data, isBinary } of queue) {
+      upstream.send(data as Buffer, { binary: isBinary });
     }
     queue.length = 0;
   }
 
-  clientWs.on('message', (data: WebSocket.RawData) => {
-    if (readOnly) return; // silently drop — work pane is view-only
+  clientWs.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
+    if (readOnly) return;
     if (!upstreamReady) {
-      queue.push(data);
+      queue.push({ data, isBinary });
       return;
     }
     if (upstream.readyState === WebSocket.OPEN) {
-      upstream.send(data as Buffer);
+      upstream.send(data as Buffer, { binary: isBinary });
     }
   });
 
