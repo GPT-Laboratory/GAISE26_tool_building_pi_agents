@@ -157,9 +157,9 @@ def run_session(session_id, prefix, backend_url, ws_url, join_code):
     result_file = f"/tmp/st_result_{prefix}_{session_id}"
     email = f"{prefix}-{session_id}@workshop.test"
 
-    # Stagger joins slightly so they don't all hit the backend at the same ms.
+    # Stagger joins so sessions don't all hit the backend at the same millisecond.
     # (In real use each participant has their own IP; the rate limit is per-IP.)
-    time.sleep(int(session_id) * 0.1)
+    time.sleep(int(session_id) * 0.3)
 
     # Join
     try:
@@ -293,11 +293,12 @@ for SCENARIO in "${RUN_SCENARIOS[@]}"; do
   # Warm enough containers for this scenario
   warm_containers "$N"
 
-  # Wait for ttyd to finish starting inside the containers.
+  # Wait for ttyd and pi to finish starting inside the containers.
   # Docker reports containers as "running" as soon as the entrypoint starts,
-  # but ttyd doesn't listen until ~3s later (cp work-seed + sleep 2 + init).
-  echo "  Waiting for ttyd to initialise…"
-  sleep 5
+  # but ttyd doesn't listen until ~3s later (cp work-seed + sleep 2 + init),
+  # and pi needs a further few seconds to render its initial TUI.
+  echo "  Waiting for containers to fully start…"
+  sleep 10
 
   # Clean up any leftover result files for this scenario
   rm -f /tmp/st_result_${PREFIX}_*
