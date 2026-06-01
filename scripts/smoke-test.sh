@@ -157,6 +157,10 @@ def run_session(session_id, prefix, backend_url, ws_url, join_code):
     result_file = f"/tmp/st_result_{prefix}_{session_id}"
     email = f"{prefix}-{session_id}@workshop.test"
 
+    # Stagger joins slightly so they don't all hit the backend at the same ms.
+    # (In real use each participant has their own IP; the rate limit is per-IP.)
+    time.sleep(int(session_id) * 0.1)
+
     # Join
     try:
         data = json.dumps({"email": email, "code": join_code}).encode()

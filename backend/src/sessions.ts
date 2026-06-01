@@ -18,7 +18,7 @@ const byToken = new Map<string, Session>();
 // Rate limiting: ip → {count, resetAt}
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
 
-const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_MAX = 30;       // per IP per window; join code is the real protection
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function checkRateLimit(ip: string): boolean {
