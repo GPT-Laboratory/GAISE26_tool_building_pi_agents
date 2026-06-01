@@ -313,19 +313,19 @@ for SCENARIO in "${RUN_SCENARIOS[@]}"; do
     if [[ -f "$f" ]]; then
       result="$(cat "$f")"
       if [[ "$result" == OK* ]]; then
-        ((OK++))
+        OK=$((OK + 1))
         lat=$(echo "$result" | grep -oP 'first=\K[0-9.]+' || echo "0")
         LATENCIES+=("$lat")
         echo "    [session $i] $result"
       elif [[ "$result" == TIMEOUT* ]]; then
-        ((TIMEOUT++))
+        TIMEOUT=$((TIMEOUT + 1))
         echo "    [session $i] TIMEOUT: $result"
       else
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
         echo "    [session $i] $result"
       fi
     else
-      ((FAIL++))
+      FAIL=$((FAIL + 1))
       echo "    [session $i] FAIL: no result"
     fi
   done
@@ -343,10 +343,10 @@ PYEOF
 
   if [[ $((FAIL + TIMEOUT)) -eq 0 ]]; then
     STATUS="PASS"
-    ((SUITE_OK++))
+    SUITE_OK=$((SUITE_OK + 1))
   else
     STATUS="FAIL"
-    ((SUITE_FAIL++))
+    SUITE_FAIL=$((SUITE_FAIL + 1))
   fi
 
   RESULT_LINE="  [$STATUS] $SCENARIO (N=$N, ${ELAPSED}s wall) — $OK/$N ok"
