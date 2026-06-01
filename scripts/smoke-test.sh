@@ -293,6 +293,12 @@ for SCENARIO in "${RUN_SCENARIOS[@]}"; do
   # Warm enough containers for this scenario
   warm_containers "$N"
 
+  # Wait for ttyd to finish starting inside the containers.
+  # Docker reports containers as "running" as soon as the entrypoint starts,
+  # but ttyd doesn't listen until ~3s later (cp work-seed + sleep 2 + init).
+  echo "  Waiting for ttyd to initialise…"
+  sleep 5
+
   # Clean up any leftover result files for this scenario
   rm -f /tmp/st_result_${PREFIX}_*
 
