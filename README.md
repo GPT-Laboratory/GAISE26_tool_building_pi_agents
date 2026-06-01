@@ -187,24 +187,27 @@ echo "your-admin-token" > .admin_token
 # 3. Build the image
 docker build -t pi-workshop -f docker/Dockerfile .
 
-# 4. Start the backend (this also creates the 'workshop' Docker bridge network)
-docker compose up -d
+# 4. Create the workshop Docker bridge network (required before starting the backend)
+docker network create workshop 2>/dev/null || true
 
-# 5. Warm the pool
-./admin warm 40
+# 5. Start the backend
+docker compose up -d
 
 # 6. Apply egress firewall — as root; must run after step 4 so the network exists
 sudo ./scripts/hardening.sh
 
-# 7. Verify
+# 7. Warm the pool
+./admin warm 40
+
+# 8. Verify
 ./admin status
 
-# 8. After the session — delete the API key(s) on the provider dashboard
+# 9. After the session — delete the API key(s) on the provider dashboard
 ```
 
-> `hardening.sh` inspects the `workshop` Docker network to find its subnet. That network is
-> created automatically when the backend starts (`pool.ts → ensureNetwork()`). If you need to
-> create it manually before starting the backend: `docker network create workshop`
+> The `workshop` network is declared `external: true` in `docker-compose.yml`, so Compose will
+> not create it — it must exist before `docker compose up`. `hardening.sh` also inspects this
+> network to determine the bridge subnet for the iptables rules.
 
 ---
 
