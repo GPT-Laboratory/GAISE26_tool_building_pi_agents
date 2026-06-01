@@ -8,6 +8,14 @@
 #
 # Then open http://localhost:3000
 
+networks:
+  # Pre-create the workshop network so the backend container is already on it
+  # when it starts managing workshop containers. Without this, the backend
+  # container (on the default compose network) can't reach workshop containers.
+  workshop:
+    name: workshop
+    driver: bridge
+
 services:
   backend:
     build:
@@ -15,6 +23,8 @@ services:
       dockerfile: backend/Dockerfile
     ports:
       - "3000:3000"
+    networks:
+      - workshop
     volumes:
       # Backend needs Docker socket to manage workshop containers
       - /var/run/docker.sock:/var/run/docker.sock
