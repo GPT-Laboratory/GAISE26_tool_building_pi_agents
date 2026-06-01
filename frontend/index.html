@@ -130,18 +130,27 @@
 
     #status-text { color: #aaa; }
 
-    #reset-btn {
+    #upload-btn, #reset-btn {
       padding: 0.25rem 0.7rem;
       background: transparent;
-      border: 1px solid #ff5555;
       border-radius: 4px;
-      color: #ff5555;
       font-family: inherit;
       font-size: 0.8rem;
       cursor: pointer;
       transition: background 0.15s;
     }
 
+    #upload-btn {
+      border: 1px solid #8be9fd;
+      color: #8be9fd;
+    }
+    #upload-btn:hover  { background: rgba(139,233,253,0.15); }
+    #upload-btn:disabled { border-color: #555; color: #555; cursor: default; }
+
+    #reset-btn {
+      border: 1px solid #ff5555;
+      color: #ff5555;
+    }
     #reset-btn:hover { background: rgba(255,85,85,0.15); }
 
     #panes {
@@ -208,7 +217,11 @@
         <span id="status-text">connecting…</span>
       </div>
     </div>
-    <button id="reset-btn" title="Restart your agent container">Restart agent</button>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+      <input type="file" id="file-input" style="display:none" multiple>
+      <button id="upload-btn" title="Upload file to data/ folder">Upload file</button>
+      <button id="reset-btn" title="Restart your agent container">Restart agent</button>
+    </div>
   </div>
   <div id="panes">
     <div class="pane-wrap">
@@ -335,6 +348,17 @@
     ({ term: agentTerm, fit: agentFit } = makeTerminal('agent-container', false));
     ({ term: workTerm,  fit: workFit  } = makeTerminal('work-container',  true));
 
+    // Register keyboard input once here — connectAgent may be called multiple times
+    // on reconnect, and registering onData there would stack up duplicate handlers.
+    agentTerm.onData(input => {
+      if (!agentWs || agentWs.readyState !== WebSocket.OPEN) return;
+      const payload = enc.encode(input);
+      const msg = new Uint8Array(1 + payload.length);
+      msg[0] = 0x30; // '0' = stdin
+      msg.set(payload, 1);
+      agentWs.send(msg);
+    });
+
     // Resize observer for both panes
     const resizeObs = new ResizeObserver(() => {
       if (agentFit) { agentFit.fit(); sendResize(agentWs, agentTerm); }
@@ -348,19 +372,27 @@
   }
 
   // ── ttyd protocol helpers
-  // ttyd uses TEXT frames; first character is the message type ('0'–'3').
-  // Server→Client: '0'=output, '1'=title, '2'=prefs
-  // Client→Server: '0'=stdin, '1'=resize JSON
+  // ttyd uses BINARY WebSocket frames; byte[0] is an ASCII digit type prefix.
+  // Server→Client: 0x30('0')=output, 0x31('1')=title, 0x32('2')=prefs
+  // Client→Server: 0x30('0')=stdin, 0x31('1')=resize JSON
+  // The proxy sends ttyd's required init JSON (no prefix) on upstream open.
+  const enc = new TextEncoder();
+
   function sendResize(ws, term) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send('1' + JSON.stringify({ columns: term.cols, rows: term.rows }));
+    const payload = enc.encode(JSON.stringify({ columns: term.cols, rows: term.rows }));
+    const msg = new Uint8Array(1 + payload.length);
+    msg[0] = 0x31; // '1' = resize
+    msg.set(payload, 1);
+    ws.send(msg);
   }
 
   function onTtydMessage(term) {
     return function(event) {
-      if (typeof event.data !== 'string') return;
-      if (event.data[0] === '0') term.write(event.data.substring(1));
-      // '1' = title, '2' = prefs — ignore
+      if (!(event.data instanceof ArrayBuffer)) return;
+      const data = new Uint8Array(event.data);
+      if (data[0] === 0x30) term.write(data.slice(1)); // '0' = output
+      // 0x31 = title, 0x32 = prefs — ignore
     };
   }
 
@@ -379,6 +411,7 @@
     updateStatus();
 
     agentWs = new WebSocket(wsUrl(`/ws/agent/${token}`), ['tty']);
+    agentWs.binaryType = 'arraybuffer';
 
     agentWs.onopen = () => {
       agentConnected = true;
@@ -395,12 +428,6 @@
       updateStatus();
       agentReconnectTimer = setTimeout(connectAgent, 3000);
     };
-
-    // Wire keyboard input → ttyd stdin
-    agentTerm.onData(input => {
-      if (!agentWs || agentWs.readyState !== WebSocket.OPEN) return;
-      agentWs.send('0' + input);
-    });
   }
 
   function connectWork() {
@@ -412,6 +439,7 @@
     updateStatus();
 
     workWs = new WebSocket(wsUrl(`/ws/work/${token}`), ['tty']);
+    workWs.binaryType = 'arraybuffer';
 
     workWs.onopen = () => {
       workConnected = true;
@@ -428,6 +456,47 @@
       workReconnectTimer = setTimeout(connectWork, 3000);
     };
   }
+
+  // ── Upload button
+  const uploadBtn = document.getElementById('upload-btn');
+  const fileInput = document.getElementById('file-input');
+
+  uploadBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const files = fileInput.files;
+    if (!files || files.length === 0) return;
+    const token = sessionStorage.getItem(S_TOKEN);
+    if (!token) return;
+
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Uploading…';
+
+    let failed = 0;
+    for (const file of files) {
+      try {
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const res = await fetch('/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, filename: file.name, data }),
+        });
+        if (!res.ok) failed++;
+      } catch { failed++; }
+    }
+
+    uploadBtn.textContent = failed === 0 ? '✓ Uploaded' : '✗ Failed';
+    setTimeout(() => {
+      uploadBtn.textContent = 'Upload file';
+      uploadBtn.disabled = false;
+    }, 2500);
+    fileInput.value = '';
+  });
 
   // ── Reset button
   document.getElementById('reset-btn').addEventListener('click', async () => {

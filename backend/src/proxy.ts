@@ -22,6 +22,11 @@ export function proxyWs(
   });
 
   upstream.on('open', () => {
+    // ttyd requires the very first message to be a plain JSON auth/init object
+    // (no type-prefix byte).  With no --credential flag the AuthToken is empty.
+    // We use a safe default size; the client's queued resize will follow.
+    const init = JSON.stringify({ AuthToken: '', columns: 80, rows: 24 });
+    upstream.send(Buffer.from(init), { binary: true });
     drainQueue();
   });
 
@@ -55,7 +60,11 @@ export function proxyWs(
   }
 
   clientWs.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
-    if (readOnly) return;
+    if (readOnly) {
+      // Read-only: forward resize (first byte 0x31 = '1') but drop stdin (0x30)
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
+      if (buf.length === 0 || buf[0] !== 0x31) return;
+    }
     if (!upstreamReady) {
       queue.push({ data, isBinary });
       return;

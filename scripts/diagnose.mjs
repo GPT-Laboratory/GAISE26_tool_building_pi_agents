@@ -78,8 +78,8 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── Phase 1: direct ────────────────────────────────────────────────────────
 
-async function phaseDirect(containerIp) {
-  const url    = `ws://${containerIp}:7681/ws`;
+async function phaseDirect(containerIp, port = '7681') {
+  const url    = `ws://${containerIp}:${port}/ws`;
   const origin = `http://${containerIp}`;
   const label  = 'DIRECT';
 
@@ -181,11 +181,11 @@ async function phaseProxy(backendUrl, joinCode) {
 
 if (PHASE === '--direct') {
   if (!ARG1) {
-    console.error('Usage: node scripts/diagnose.mjs --direct <container-ip>');
+    console.error('Usage: node scripts/diagnose.mjs --direct <container-ip> [port]');
     console.error('  Get IP: docker inspect $(docker ps -qf ancestor=pi-workshop) --format \'{{.NetworkSettings.Networks.workshop.IPAddress}}\'');
     process.exit(1);
   }
-  await phaseDirect(ARG1);
+  await phaseDirect(ARG1, process.argv[4] ?? '7681');
 
 } else if (PHASE === '--proxy') {
   if (!ARG1 || !ARG2) {

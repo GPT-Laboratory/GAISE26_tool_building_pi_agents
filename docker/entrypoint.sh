@@ -7,30 +7,33 @@ if [ ! -d /home/agent/work ]; then
 fi
 cp -r /home/agent/work-seed/. /home/agent/work/
 
-# Start tmux session with agent window
-tmux new-session -d -s s -n agent
-
-# Launch pi in agent window
-tmux send-keys -t s:agent \
-  "cd /home/agent/work && OPENAI_BASE_URL=\"${OPENAI_BASE_URL}\" OPENAI_API_KEY=\"${OPENAI_API_KEY}\" PI_MODEL=\"${PI_MODEL}\" pi" \
-  C-m
+# Run pi directly as the tmux window command (not via send-keys) so the
+# invocation and API key are never visible in the terminal scroll buffer.
+tmux new-session -d -s s -n agent \
+  bash -c "cd /home/agent/work && exec pi --model \"${PI_MODEL}\" --api-key \"${OPENAI_API_KEY}\""
 
 # Brief pause so pi can initialize before ttyd attaches
 sleep 2
 
-# Create work window with live activity view
-tmux new-window -t s -n work
-tmux send-keys -t s:work \
-  "cd /home/agent/work && watch -n 1 -t 'ls -la; echo; tail -n 60 .activity.log 2>/dev/null'" \
-  C-m
+# Work window: live activity log (written by the activity-log.ts pi extension)
+tmux new-window -t s -n work \
+  bash -c "cd /home/agent/work && touch .activity.log && exec tail -f .activity.log"
+
+# Create grouped (linked) sessions so each ttyd client has independent window focus.
+# Without this, whichever ttyd attaches last sets the active window for ALL clients,
+# causing both panes to show the same window.
+tmux new-session -d -s agent-view -t s
+tmux new-session -d -s work-view  -t s
+tmux select-window -t agent-view:agent
+tmux select-window -t work-view:work
 
 # ttyd for agent pane (writable) — bind 0.0.0.0 so backend can reach over Docker network
 # Do NOT publish ports; container is on internal workshop network only
-ttyd --writable -p 7681 -t fontSize=14 tmux attach-session -t s:agent &
+ttyd --writable -p 7681 -t fontSize=14 tmux attach-session -t agent-view &
 TTYD_AGENT_PID=$!
 
 # ttyd for work pane (read-only — no --writable flag)
-ttyd -p 7682 -t fontSize=14 tmux attach-session -t s:work &
+ttyd -p 7682 -t fontSize=14 tmux attach-session -t work-view &
 TTYD_WORK_PID=$!
 
 # Keep PID 1 alive; SIGTERM propagates to children via trap

@@ -1,7 +1,7 @@
 import Dockerode from 'dockerode';
 import { readFileSync, existsSync } from 'fs';
 
-const docker = new Dockerode();
+export const docker = new Dockerode();
 
 const NETWORK_NAME = 'workshop';
 const IMAGE_NAME = 'pi-workshop';
