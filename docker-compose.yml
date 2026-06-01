@@ -9,12 +9,11 @@
 # Then open http://localhost:3000
 
 networks:
-  # Pre-create the workshop network so the backend container is already on it
-  # when it starts managing workshop containers. Without this, the backend
-  # container (on the default compose network) can't reach workshop containers.
+  # The workshop network is created by the backend at startup (ensureNetwork).
+  # Mark external so Compose doesn't try to own/relabel it.
   workshop:
     name: workshop
-    driver: bridge
+    external: true
 
 services:
   backend:
