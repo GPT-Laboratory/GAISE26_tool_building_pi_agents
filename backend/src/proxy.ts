@@ -36,12 +36,10 @@ export function proxyWs(
     if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1011, 'upstream error');
   });
 
-  upstream.on('close', (code, reason) => {
-    if (clientWs.readyState === WebSocket.OPEN) {
-      // Guard against invalid close codes (e.g. 0) which ws rejects
-      const safeCode = code >= 1000 ? code : 1000;
-      clientWs.close(safeCode, reason);
-    }
+  upstream.on('close', () => {
+    // Don't forward the upstream close code — codes like 1006 (abnormal closure)
+    // are valid to receive but illegal to send, and ws throws on them.
+    if (clientWs.readyState === WebSocket.OPEN) clientWs.close(1000);
   });
 
   // Queue messages that arrive before upstream is OPEN
