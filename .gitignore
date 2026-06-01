@@ -219,7 +219,6 @@ __marimo__/
 
 # Node
 node_modules/
-backend/package-lock.json
 
 # Secrets
 keys.txt
