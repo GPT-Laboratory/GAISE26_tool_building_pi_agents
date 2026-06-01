@@ -1,12 +1,12 @@
-# Local single-container dev stack.
-# Spins up the backend (POOL_SIZE=1) and lets Docker manage one workshop container.
+# Workshop platform stack.
+# For local dev, override POOL_SIZE in .env or on the command line:
+#   POOL_SIZE=1 docker compose up
 #
 # Setup:
-#   cp backend/.env.example .env   # then fill in PI_MODEL and OPENAI_API_KEY
+#   cp backend/.env.example .env   # then fill in PI_MODEL, OPENAI_API_KEY, POOL_SIZE, etc.
 #   docker build -t pi-workshop -f docker/Dockerfile .
-#   docker compose up
-#
-# Then open http://localhost:3000
+#   docker network create workshop
+#   docker compose up -d
 
 networks:
   # The workshop network is created by the backend at startup (ensureNetwork).
@@ -31,6 +31,4 @@ services:
       - ./frontend:/app/frontend:ro
     env_file:
       - .env
-    environment:
-      POOL_SIZE: "1"
     restart: unless-stopped
