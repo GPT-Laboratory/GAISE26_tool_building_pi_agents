@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"  # localhost only; nginx proxies externally
     networks:
       - workshop
     volumes:
